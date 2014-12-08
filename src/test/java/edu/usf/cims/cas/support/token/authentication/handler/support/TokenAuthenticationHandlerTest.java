@@ -1,16 +1,20 @@
 package edu.usf.cims.cas.support.token.authentication.handler.support;
 
 import edu.clayton.cas.support.token.keystore.JSONKeystore;
-import edu.usf.cims.cas.support.token.authentication.principal.TokenCredentials;
+import edu.usf.cims.cas.support.token.authentication.principal.TokenCredential;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import org.jasig.cas.authentication.HandlerResult;
 import org.jasig.cas.authentication.handler.BadCredentialsAuthenticationException;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
 import java.net.URL;
+import java.security.GeneralSecurityException;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThat;
 
 public class TokenAuthenticationHandlerTest {
   private String b64Token =
@@ -20,18 +24,18 @@ public class TokenAuthenticationHandlerTest {
       "d7+T4iE=";
 
   private TokenAuthenticationHandler handler;
-  private TokenCredentials validCredentials;
-  private TokenCredentials invalidCredentials;
+  private TokenCredential validCredential;
+  private TokenCredential invalidCredential;
 
   @Before
   public void setup() {
     this.handler = new TokenAuthenticationHandler();
-    this.validCredentials = new TokenCredentials(
+    this.validCredential = new TokenCredential(
         "jsumners",
         this.b64Token,
         "alphabet_key"
     );
-    this.invalidCredentials = new TokenCredentials(
+    this.invalidCredential = new TokenCredential(
         "jsumners",
         this.b64Token,
         "number_key"
@@ -40,7 +44,7 @@ public class TokenAuthenticationHandlerTest {
 
   @Test
   public void testSupports() {
-    assertTrue(this.handler.supports(validCredentials));
+    assertTrue(this.handler.supports(validCredential));
   }
 
   @Test
@@ -52,10 +56,10 @@ public class TokenAuthenticationHandlerTest {
     this.handler.setKeystore(jsonKeystore);
     this.handler.setMaxDrift(Integer.MAX_VALUE);
 
-    assertTrue(this.handler.doAuthentication(this.validCredentials));
+    assertThat(this.handler.authenticate(this.validCredential), instanceOf(HandlerResult.class));
   }
 
-  @Test(expected = BadCredentialsAuthenticationException.class)
+  @Test(expected = GeneralSecurityException.class)
   public void testAuthFailure() throws Exception {
     URL url = this.getClass().getClassLoader().getResource("testHandlerStoreWithBadKey.json");
     File keystoreFile = new File(url.toURI());
@@ -64,6 +68,8 @@ public class TokenAuthenticationHandlerTest {
     this.handler.setKeystore(jsonKeystore);
     this.handler.setMaxDrift(Integer.MAX_VALUE);
 
-    assertFalse(this.handler.doAuthentication(this.invalidCredentials));
+    HandlerResult result = this.handler.authenticate(this.invalidCredential);
+
+    assertFalse(result.getWarnings().isEmpty());
   }
 }
