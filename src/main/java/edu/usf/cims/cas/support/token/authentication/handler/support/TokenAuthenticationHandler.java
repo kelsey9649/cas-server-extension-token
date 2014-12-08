@@ -17,115 +17,158 @@ package edu.usf.cims.cas.support.token.authentication.handler.support;
 import edu.clayton.cas.support.token.Token;
 import edu.clayton.cas.support.token.keystore.Key;
 import edu.clayton.cas.support.token.keystore.Keystore;
-import edu.usf.cims.cas.support.token.authentication.principal.TokenCredentials;
-import org.jasig.cas.authentication.handler.AuthenticationException;
-import org.jasig.cas.authentication.handler.BadCredentialsAuthenticationException;
-import org.jasig.cas.authentication.handler.support.AbstractPreAndPostProcessingAuthenticationHandler;
-import org.jasig.cas.authentication.principal.Credentials;
+import edu.usf.cims.cas.support.token.authentication.principal.TokenCredential;
+import org.jasig.cas.Message;
+import org.jasig.cas.authentication.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
 /**
- * This handler authenticates token credentials 
- * 
+ * This handler authenticates token credentials
+ *
  * @author Eric Pierce
  * @since 0.1
+ * @author Curtis Kelsey
+ * @since 0.7
  */
-public final class TokenAuthenticationHandler extends AbstractPreAndPostProcessingAuthenticationHandler {
-  private final static Logger log = LoggerFactory.getLogger(TokenAuthenticationHandler.class);
+public final class TokenAuthenticationHandler extends AbstractAuthenticationHandler {
+    private final static Logger log = LoggerFactory.getLogger(TokenAuthenticationHandler.class);
 
-  /** An instance of a {@link edu.clayton.cas.support.token.keystore.Keystore}. **/
-  private Keystore keystore;
+    /**
+     * An instance of a {@link edu.clayton.cas.support.token.keystore.Keystore}. *
+     */
+    private Keystore keystore;
 
-  /** A list of required attributes that will be passed along to the {@link edu.clayton.cas.support.token.TokenAttributes} instance. **/
-  private List requiredTokenAttributes;
+    /**
+     * A list of required attributes that will be passed along to the {@link edu.clayton.cas.support.token.TokenAttributes} instance. *
+     */
+    private List requiredTokenAttributes;
 
-  /** A map of attribute names to {@link edu.clayton.cas.support.token.TokenAttributes} properties that will be passed along. **/
-  private Map tokenAttributesMap;
+    /**
+     * A map of attribute names to {@link edu.clayton.cas.support.token.TokenAttributes} properties that will be passed along. *
+     */
+    private Map tokenAttributesMap;
 
-  /* Maximum amount of time (before or after current time) that the 'generated' parameter 
-   * in the supplied token can differ from the server */
-  private int maxDrift;
+    /* Maximum amount of time (before or after current time) that the 'generated' parameter
+     * in the supplied token can differ from the server */
+    private int maxDrift;
 
-  public boolean supports(Credentials credentials) {
-      return credentials != null && (TokenCredentials.class.isAssignableFrom(credentials.getClass()));
-  }
-    
-  @Override
-  protected boolean doAuthentication(Credentials credentials) throws AuthenticationException {
-    boolean result = false;
-    TokenCredentials credential = (TokenCredentials) credentials;
-
-    // Check to see if the api_key is allowed.
-    Key apiKey = this.keystore.getKeyNamed(credential.getTokenService());
-    if (apiKey == null) {
-      log.warn("API key not found in keystore!");
-      throw new BadCredentialsAuthenticationException("error.authentication.credentials.bad.token.apikey");
+    /**
+     *
+     * @param credential
+     * @return
+     */
+    public boolean supports(Credential credential) {
+        return credential != null && (TokenCredential.class.isAssignableFrom(credential.getClass()));
     }
 
-    // Configure the credential's token so that it can be decrypted.
-    Token token = credential.getToken();
-    token.setKey(apiKey);
-    token.setRequiredTokenAttributes(this.requiredTokenAttributes);
-    token.setTokenAttributesMap(this.tokenAttributesMap);
-    credential.setToken(token);
+    /**
+     *
+     * @param credential
+     * @return
+     * @throws GeneralSecurityException
+     * @throws PreventedException
+     */
+    @Override
+    public HandlerResult authenticate(Credential credential) throws GeneralSecurityException, PreventedException {
+        List<Message> warnings = new ArrayList<Message>();
 
-    try {
-      credential.setUserAttributes(token.getAttributes());
-    } catch (Exception e) {
-      log.warn("Could not decrypt token!");
-      throw new BadCredentialsAuthenticationException("error.authentication.credentials.bad.token.key");
+        TokenCredential tokenCredential = (TokenCredential) credential;
+
+        // Check to see if the api_key is allowed.
+        Key apiKey = this.keystore.getKeyNamed(tokenCredential.getTokenService());
+        if (apiKey == null) {
+            log.warn("API key not found in keystore!");
+            throw new GeneralSecurityException("error.authentication.credentials.bad.token.apikey");
+        }
+
+        // Configure the credential's token so that it can be decrypted.
+        Token token = tokenCredential.getToken();
+        token.setKey(apiKey);
+        token.setRequiredTokenAttributes(this.requiredTokenAttributes);
+        token.setTokenAttributesMap(this.tokenAttributesMap);
+        tokenCredential.setToken(token);
+
+        try {
+            tokenCredential.setUserAttributes(token.getAttributes());
+        } catch (Exception e) {
+            log.warn("Could not decrypt token!");
+            throw new GeneralSecurityException("error.authentication.credentials.bad.token.key");
+        }
+
+        if (!token.getAttributes().isValid()) {
+            log.warn("Invalid token attributes detected.");
+            throw new GeneralSecurityException("error.authentication.credentials.missing.required.attributes");
+        }
+
+        // This username was given in the request URL.
+        String credUsername = tokenCredential.getUsername();
+        // This username is from the decrypted token.
+        String attrUsername = tokenCredential.getToken().getAttributes().getUsername();
+
+        log.debug("Got username from token : {}", credUsername);
+
+        // Get the difference between the generated time and now.
+        int genTimeDiff = Math.abs((int) (new Date().getTime() - token.getGenerated()) / 1000);
+        log.debug("Token generated {} seconds ago", genTimeDiff);
+
+        if (genTimeDiff > this.maxDrift) {
+            log.warn("Authentication Error: Token expired for {}", credUsername);
+            throw new GeneralSecurityException("error.authentication.credentials.bad.token.expired");
+        }
+
+        if (attrUsername.equals(credUsername)) {
+            log.debug("Authentication Success");
+        } else {
+            log.error("Authentication Error: Client passed username [{}], token generated for [{}]", credUsername, attrUsername);
+            throw new GeneralSecurityException("error.authentication.credentials.bad.token.username");
+        }
+
+        CredentialMetaData metaData = new CredentialMetaData() {
+            @Override
+            public String getId() {
+                return null;
+            }
+        };
+
+        return new HandlerResult(this, metaData, warnings);
     }
 
-    if (!token.getAttributes().isValid()) {
-      log.warn("Invalid token attributes detected.");
-      throw new BadCredentialsAuthenticationException("error.authentication.credentials.missing.required.attributes");
+    /**
+     *
+     * @param keystore
+     */
+    public final void setKeystore(final Keystore keystore) {
+        this.keystore = keystore;
     }
 
-    // This username was given in the request URL.
-    String credUsername = credential.getUsername();
-    // This username is from the decrypted token.
-    String attrUsername = credential.getToken().getAttributes().getUsername();
-
-    log.debug("Got username from token : {}", credUsername);
-
-    // Get the difference between the generated time and now.
-    int genTimeDiff = Math.abs((int) (new Date().getTime() - token.getGenerated()) / 1000);
-    log.debug("Token generated {} seconds ago", genTimeDiff);
-
-    if (genTimeDiff > this.maxDrift) {
-      log.warn("Authentication Error: Token expired for {}", credUsername);
-      throw new BadCredentialsAuthenticationException("error.authentication.credentials.bad.token.expired");
+    /**
+     *
+     * @param maxDrift
+     */
+    public final void setMaxDrift(final int maxDrift) {
+        this.maxDrift = maxDrift;
     }
 
-    if (attrUsername.equals(credUsername)) {
-      log.debug("Authentication Success");
-      result = true;
-    } else {
-      log.error("Authentication Error: Client passed username [{}], token generated for [{}]", credUsername, attrUsername);
-      throw new BadCredentialsAuthenticationException("error.authentication.credentials.bad.token.username");
+    /**
+     *
+     * @param requiredTokenAttributes
+     */
+    public final void setRequiredTokenAttributes(final List requiredTokenAttributes) {
+        this.requiredTokenAttributes = requiredTokenAttributes;
     }
 
-    return result;
-  }
-
-  public final void setKeystore(final Keystore keystore) {
-    this.keystore = keystore;
-  }
-
-  public final void setMaxDrift(final int maxDrift){
-    this.maxDrift = maxDrift;
-  }
-
-  public final void setRequiredTokenAttributes(final List requiredTokenAttributes) {
-    this.requiredTokenAttributes = requiredTokenAttributes;
-  }
-
-  public final void setTokenAttributesMap(final Map tokenAttributesMap) {
-    this.tokenAttributesMap = tokenAttributesMap;
-  }
+    /**
+     *
+     * @param tokenAttributesMap
+     */
+    public final void setTokenAttributesMap(final Map tokenAttributesMap) {
+        this.tokenAttributesMap = tokenAttributesMap;
+    }
 }
