@@ -7,7 +7,6 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -16,17 +15,17 @@ import java.util.Map;
  * data is a {@link Base64} encoded string. When decoded, this string is an
  * AES encrypted string that decrypts to another string that represents a
  * {@link JSONObject} with the following properties:</p>
- *
+ * <p/>
  * <ul>
- *   <li>
- *     {@code generated}: a timestamp, in milliseconds, at which the token
- *     was created
- *   </li>
- *   <li>
- *     {@code credentials}: a serialized {@link TokenAttributes} object
- *   </li>
+ * <li>
+ * {@code generated}: a timestamp, in milliseconds, at which the token
+ * was created
+ * </li>
+ * <li>
+ * {@code credentials}: a serialized {@link TokenAttributes} object
+ * </li>
  * </ul>
- *
+ * <p/>
  * <p>Initially, the {@linkplain Token} is not decrypted. Decryption will be
  * attempted when either the
  * {@link edu.clayton.cas.support.token.Token#getGenerated()} or
@@ -36,120 +35,119 @@ import java.util.Map;
  * method be invoked prior to accessing either of these properties.</p>
  */
 public class Token {
-  private final static Logger log = LoggerFactory.getLogger(Token.class);
+    private final static Logger log = LoggerFactory.getLogger(Token.class);
 
-  private Key key;
-  private String tokenData;
-  private boolean isDecoded = false;
+    private Key key;
+    private String tokenData;
+    private boolean isDecoded = false;
 
-  private long generated;
-  private TokenAttributes attributes;
-  private List requiredTokenAttributes;
-  private Map tokenAttributesMap;
+    private long generated;
+    private TokenAttributes attributes;
+    private List requiredTokenAttributes;
+    private Map tokenAttributesMap;
 
-  /**
-   * Initializes a {@linkplain Token} object from a
-   * {@link org.apache.commons.codec.binary.Base64} encoded data string.
-   *
-   * @param data The data to decode into a {@linkplain Token}.
-   */
-  public Token(String data)
-  {
-    this.tokenData = data;
-  }
-
-  /**
-   * Retrieve the {@link TokenAttributes} object associated with this
-   * {@linkplain Token}. The attributes include the user's username, first name,
-   * last name, and email address.
-   *
-   * @return A valid {@linkplain TokenAttributes} object or null if not decrypted.
-   */
-  public TokenAttributes getAttributes() {
-    TokenAttributes attrs = null;
-
-    if (this.isDecoded) {
-      attrs = this.attributes;
-    } else {
-      try {
-        this.decryptData();
-      } catch (Exception e) {
-        log.error("No TokenAttributes available!");
-      }
-      attrs = this.attributes;
+    /**
+     * Initializes a {@linkplain Token} object from a
+     * {@link org.apache.commons.codec.binary.Base64} encoded data string.
+     *
+     * @param data The data to decode into a {@linkplain Token}.
+     */
+    public Token(String data) {
+        this.tokenData = data;
     }
 
-    return attrs;
-  }
+    /**
+     * Retrieve the {@link TokenAttributes} object associated with this
+     * {@linkplain Token}. The attributes include the user's username, first name,
+     * last name, and email address.
+     *
+     * @return A valid {@linkplain TokenAttributes} object or null if not decrypted.
+     */
+    public TokenAttributes getAttributes() {
+        TokenAttributes attributes = null;
 
-  /**
-   * Return the timestamp, in milliseconds, when the {@linkplain Token} was
-   * generated.
-   *
-   * @return The timestamp from the client or the epoch if not decrypted.
-   */
-  public long getGenerated() {
-    long returnDate = (new Date(0L)).getTime();
+        if (this.isDecoded) {
+            attributes = this.attributes;
+        } else {
+            try {
+                this.decryptData();
+            } catch (Exception e) {
+                log.error("No TokenAttributes available!");
+            }
+            attributes = this.attributes;
+        }
 
-    if (this.isDecoded) {
-      returnDate = this.generated;
-    } else {
-      try {
-        this.decryptData();
-      } catch (Exception e) {
-        log.error("No generated timestamp available!");
-      }
-      returnDate = this.generated;
+        return attributes;
     }
 
-    return returnDate;
-  }
+    /**
+     * Return the timestamp, in milliseconds, when the {@linkplain Token} was
+     * generated.
+     *
+     * @return The timestamp from the client or the epoch if not decrypted.
+     */
+    public long getGenerated() {
+        long returnDate;
 
-  /**
-   * Define the crypto key that will be used to decode the {@linkplain Token}
-   * data.
-   *
-   * @param key A valid {@link Key} object.
-   */
-  public void setKey(Key key) {
-    this.key = key;
-  }
+        if (this.isDecoded) {
+            returnDate = this.generated;
+        } else {
+            try {
+                this.decryptData();
+            } catch (Exception e) {
+                log.error("No generated timestamp available!");
+            }
+            returnDate = this.generated;
+        }
 
-  public void setRequiredTokenAttributes(List requiredTokenAttributes) {
-    this.requiredTokenAttributes = requiredTokenAttributes;
-  }
-
-  public void setTokenAttributesMap(Map tokenAttributesMap) {
-    this.tokenAttributesMap = tokenAttributesMap;
-  }
-
-  private void decryptData() throws Exception {
-    try {
-      log.debug(
-          "Decrypting token with key = `{}`",
-          new String(this.key.data())
-      );
-      String decryptedString = Crypto.decryptEncodedStringWithKey(
-          this.tokenData,
-          this.key
-      );
-      JSONObject jsonObject = new JSONObject(decryptedString);
-      log.debug("Decrypted token:");
-      log.debug(jsonObject.toString());
-
-      this.generated = jsonObject.getLong("generated");
-      this.attributes = new TokenAttributes(
-          jsonObject.getJSONObject("credentials").toString(),
-          this.requiredTokenAttributes,
-          this.tokenAttributesMap
-      );
-      this.isDecoded = true;
-
-      log.debug("Token successfully decrypted.");
-    } catch (Exception e) {
-      log.error("There was a problem decrypting the token data!");
-      log.debug(e.toString());
-      throw e;
+        return returnDate;
     }
-  }
+
+    /**
+     * Define the crypto key that will be used to decode the {@linkplain Token}
+     * data.
+     *
+     * @param key A valid {@link Key} object.
+     */
+    public void setKey(Key key) {
+        this.key = key;
+    }
+
+    public void setRequiredTokenAttributes(List requiredTokenAttributes) {
+        this.requiredTokenAttributes = requiredTokenAttributes;
+    }
+
+    public void setTokenAttributesMap(Map tokenAttributesMap) {
+        this.tokenAttributesMap = tokenAttributesMap;
+    }
+
+    private void decryptData() throws Exception {
+        try {
+            log.debug(
+                    "Decrypting token with key = `{}`",
+                    new String(this.key.data())
+            );
+            String decryptedString = Crypto.decryptEncodedStringWithKey(
+                    this.tokenData,
+                    this.key
+            );
+            JSONObject jsonObject = new JSONObject(decryptedString);
+            log.debug("Decrypted token:");
+            log.debug(jsonObject.toString());
+
+            this.generated = jsonObject.getLong("generated");
+            this.attributes = new TokenAttributes(
+                    jsonObject.getJSONObject("credentials").toString(),
+                    this.requiredTokenAttributes,
+                    this.tokenAttributesMap
+            );
+            this.isDecoded = true;
+
+            log.debug("Token successfully decrypted.");
+        } catch (Exception e) {
+            log.error("There was a problem decrypting the token data!");
+            log.debug(e.toString());
+            throw e;
+        }
+    }
 }
