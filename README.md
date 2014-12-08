@@ -1,4 +1,4 @@
-# Token Authentication Module for Jasig CAS Server 3.x
+# Token Authentication Module for Jasig CAS Server 4.0.0
 
 This module allows you to authenticate and pass attributes for a user with a AES128-encrypted token instead of a password.   
 
