@@ -14,13 +14,12 @@
 */
 package edu.usf.cims.cas.support.token.authentication;
 
-import org.jasig.cas.authentication.Authentication;
+import edu.usf.cims.cas.support.token.authentication.principal.TokenCredential;
+import org.jasig.cas.authentication.AuthenticationBuilder;
 import org.jasig.cas.authentication.AuthenticationMetaDataPopulator;
-import org.jasig.cas.authentication.MutableAuthentication;
-import org.jasig.cas.authentication.principal.Credentials;
+import org.jasig.cas.authentication.Credential;
 import org.jasig.cas.authentication.principal.Principal;
 import org.jasig.cas.authentication.principal.SimplePrincipal;
-import edu.usf.cims.cas.support.token.authentication.principal.TokenCredentials;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,17 +34,14 @@ public final class TokenAuthenticationMetaDataPopulator implements Authenticatio
 
   private static final Logger logger = LoggerFactory.getLogger(TokenAuthenticationMetaDataPopulator.class);
     
-  public Authentication populateAttributes(Authentication authentication, Credentials credentials) {
-    if (credentials instanceof TokenCredentials) {
-      TokenCredentials tokenCredentials = (TokenCredentials) credentials;
-      final Principal simplePrincipal = new SimplePrincipal(authentication.getPrincipal().getId(),
-                                                              tokenCredentials.getUserAttributes());
-      final MutableAuthentication mutableAuthentication = new MutableAuthentication(simplePrincipal,
-                                                                                      authentication.getAuthenticatedDate());
+  public void populateAttributes(AuthenticationBuilder authenticationBuilder, Credential credential) {
+
+    if (credential instanceof TokenCredential) {
+      TokenCredential tokenCredential = (TokenCredential) credential;
+      final Principal simplePrincipal = new SimplePrincipal(authenticationBuilder.getPrincipal().getId(),
+                                                              tokenCredential.getUserAttributes());
+
       logger.debug("attributes : {}",simplePrincipal.getAttributes());
-      mutableAuthentication.getAttributes().putAll(authentication.getAttributes());
-      return mutableAuthentication;
     }
-    return authentication;
   }
 }
