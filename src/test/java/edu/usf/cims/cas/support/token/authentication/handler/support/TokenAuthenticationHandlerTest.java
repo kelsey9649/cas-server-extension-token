@@ -4,7 +4,6 @@ import edu.clayton.cas.support.token.keystore.JSONKeystore;
 import edu.usf.cims.cas.support.token.authentication.principal.TokenCredential;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import org.jasig.cas.authentication.HandlerResult;
-import org.jasig.cas.authentication.handler.BadCredentialsAuthenticationException;
 import org.junit.Before;
 import org.junit.Test;
 
